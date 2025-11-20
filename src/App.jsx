@@ -6,10 +6,17 @@ const TradingViewWidget = ({ symbol, theme }) => {
   const containerRef = useRef();
 
   useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.innerHTML = "";
-    }
+    if (!containerRef.current) return;
 
+    // 清掉舊內容
+    containerRef.current.innerHTML = "";
+
+    // 建新的 widget 容器
+    const widgetDiv = document.createElement('div');
+    widgetDiv.className = 'tradingview-widget-container__widget';
+    containerRef.current.appendChild(widgetDiv);
+
+    // 再插入 TradingView 的 script
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
     script.type = "text/javascript";
@@ -84,12 +91,12 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
 
   // We keep the localStorage logic as a fallback or override
-  useEffect(() => {
-    const savedKey = localStorage.getItem('pplx_api_key');
-    if (savedKey) {
-      setApiKey(savedKey);
-    }
-  }, []);
+  // useEffect(() => {
+  //   const savedKey = localStorage.getItem('pplx_api_key');
+  //   if (savedKey) {
+  //     setApiKey(savedKey);
+  //   }
+  // }, []);
 
   const handleSaveKey = (val) => {
     setApiKey(val);
@@ -139,34 +146,41 @@ export default function App() {
             messages: [
               {
                 role: "system",
-                content: `You are a professional Wall Street senior analyst creating a pre-market briefing for sophisticated investors. 
-                Analyze the stock symbol provided.
-                
-                **IMPORTANT INSTRUCTION**:
-                1.  **LANGUAGE**: All text content MUST be in **Traditional Chinese (繁體中文)**.
-                2.  **STYLE**: Professional, analytical, detailed, and insightful. Avoid generic summaries. Use financial terminology (e.g., "獲利回吐", "估值壓力", "震盪整理").
-                3.  **FORMAT**: Return ONLY a valid JSON object.
-                
-                Expected JSON Structure:
-                {
-                  "symbol": "STRING (Ticker)",
-                  "sentiment_score": NUMBER (1-10),
-                  "support_level_short": "STRING (e.g. '215 / 200 USD')",
-                  "resistance_level_short": "STRING (e.g. '235 USD')",
-                  "major_news": "STRING (Bullet points. The most critical news headlines for today. e.g., '• CEO announced new AI chip partnership\\n• Q3 earnings beat expectations')",
-                  "market_factors": "STRING (Detailed paragraph. Discuss main bull/bear factors, valuation pressure, investor sentiment, etc.)",
-                  "technical_analysis_detailed": "STRING (Detailed paragraph. Discuss floor price, support zones, technical patterns, moving averages status. Similar to: '下方主力支撐分別在...若再失守則...')",
-                  "future_outlook": "STRING (Detailed paragraph. Discuss long-term view, 2025/2026 expectations, revenue growth drivers)",
-                  "conclusion": "STRING (A concise, actionable verdict or summary of the current stance)"
-                }`
+                content: `You are a professional Wall Street senior analyst creating a **pre-market briefing** for sophisticated investors based on the most recent data **as of today**.
+ANALYZE the stock symbol provided.
+
+**IMPORTANT INSTRUCTION**:
+1. LANGUAGE: All text content MUST be in Traditional Chinese (繁體中文).
+2. STYLE: Professional, analytical, detailed, and insightful. Avoid generic summaries. Use financial terminology (e.g., "獲利回吐", "估值壓力", "震盪整理").
+3. FORMAT: Return ONLY a valid JSON object. Do NOT include any markdown, explanation, or extra text.
+4. TODAY’S DATE: Be aware today's date is **<INSERT-TODAY-DATE>**. Make sure your analysis and any references to “今日”、“明日”、“未來一週” are appropriate to that date.
+
+Expected JSON Structure:
+{
+  "symbol": "STRING (Ticker)",
+  "sentiment_score": NUMBER (1-10),
+  "support_level_short": "STRING (e.g. '215 / 200 USD')",
+  "resistance_level_short": "STRING (e.g. '235 USD')",
+  "major_news": "STRING (Bullet points. The most critical news headlines up to today)",
+  "market_factors": "STRING (Detailed paragraph in 繁體中文. Explaining current bull/bear factors, valuation pressure, investor sentiment, recent catalysts)",
+  "technical_analysis_detailed": "STRING (Detailed paragraph in 繁體中文. Provide short-term support/resistance, moving averages status, volume structure, key breakout/failure levels)",
+
+  "tomorrow_forecast": "STRING (Detailed paragraph in 繁體中文. Give tomorrow’s expected scenario, price-range if possible, and the key drivers for upside/downside such as upcoming data/events)",
+  "week_ahead_forecast": "STRING (Detailed paragraph in 繫體中文. Focus on the coming week’s outlook, potential range, major events/catalysts, risk scenarios and contingency key levels)",
+
+  "future_outlook": "STRING (Detailed paragraph in 繯體中文. Mid-to-long term (3-12 mo) view, growth drivers, structural changes, valuation re-rating possibilities)",
+  "conclusion": "STRING (短而有行動性的總結，用繁體中文，例如：「偏多續抱／逢回佈局／保守觀望／逢高減碼」）"
+}`
               },
               {
                 role: "user",
-                content: `Deep analysis for ${symbol}. Focus on market sentiment, technical levels, and future outlook. Make sure to include the most recent major news.`
+                content: `Deep analysis for ${symbol}, using **today’s date (YYYY/MM/DD)**. Focus on market sentiment, technical levels, tomorrow’s price action, the coming week, and long-term outlook. Include the latest major news up to today.`
               }
             ]
           })
         });
+        console.log('ENV KEY:', import.meta.env.VITE_PERPLEXITY_API_KEY);
+
 
         if (!response.ok) {
           throw new Error(`API Error: ${response.status}`);
@@ -271,8 +285,8 @@ export default function App() {
                     key={t}
                     onClick={() => toggleTicker(t)}
                     className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all border ${selectedTickers.has(t)
-                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/30'
-                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-200'
+                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/30'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-200'
                       }`}
                   >
                     {t}
@@ -301,8 +315,8 @@ export default function App() {
                 onClick={generateBriefing}
                 disabled={loading}
                 className={`w-full py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-all border ${loading
-                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 border-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-95'
+                  ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 border-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-95'
                   }`}
               >
                 {loading ? (
@@ -366,8 +380,8 @@ export default function App() {
                           {hasData && (
                             <div className="flex flex-col items-end">
                               <div className={`px-4 py-1.5 rounded-full text-sm font-bold border mb-2 ${data.sentiment_score >= 7 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' :
-                                  data.sentiment_score <= 4 ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20' :
-                                    'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'
+                                data.sentiment_score <= 4 ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20' :
+                                  'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'
                                 }`}>
                                 Sentiment Score: {data.sentiment_score}/10
                               </div>
@@ -434,7 +448,30 @@ export default function App() {
                               </p>
                             </div>
 
-                            {/* 3. Outlook & Conclusion */}
+                            {/* 3. Short-term Price Forecasts */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* 明日股價預測 */}
+                              <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-lg border border-amber-100 dark:border-amber-600/30">
+                                <h4 className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase mb-2 flex items-center">
+                                  <DollarSign className="w-3 h-3 mr-2" /> 明日股價預測
+                                </h4>
+                                <p className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                                  {data.tomorrow_forecast}
+                                </p>
+                              </div>
+
+                              {/* 未來一週走勢預測 */}
+                              <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-lg border border-sky-100 dark:border-sky-600/30">
+                                <h4 className="text-xs font-bold text-sky-700 dark:text-sky-300 uppercase mb-2 flex items-center">
+                                  <TrendingDown className="w-3 h-3 mr-2" /> 未來一週走勢預測
+                                </h4>
+                                <p className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                                  {data.week_ahead_forecast}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* 4. Outlook & Conclusion */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
                                 <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 flex items-center">
@@ -453,6 +490,7 @@ export default function App() {
                                 </p>
                               </div>
                             </div>
+
 
                           </div>
                         )}
