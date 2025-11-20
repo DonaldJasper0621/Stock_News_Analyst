@@ -3,76 +3,68 @@ import { LineChart, RefreshCw, Settings, Plus, X, TrendingUp, TrendingDown, Aler
 
 // --- TradingView Widget Component ---
 const TradingViewWidget = ({ symbol, theme }) => {
-  const containerRef = useRef();
+  const containerRef = React.useRef(null);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+  React.useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-    // 清掉舊內容
-    containerRef.current.innerHTML = "";
-
-    // 建新的 widget 容器
+    // 1. 建 widget 容器
     const widgetDiv = document.createElement('div');
     widgetDiv.className = 'tradingview-widget-container__widget';
-    containerRef.current.appendChild(widgetDiv);
+    container.appendChild(widgetDiv);
 
-    // 再插入 TradingView 的 script
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
-    script.type = "text/javascript";
+    // 2. 建 script
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
+    script.type = 'text/javascript';
     script.async = true;
-    script.innerHTML = JSON.stringify({
-      "symbols": [
-        [
-          symbol,
-          symbol + "|1D"
-        ]
-      ],
-      "chartOnly": false,
-      "width": "100%",
-      "height": "300",
-      "locale": "en",
-      "colorTheme": theme, // Dynamic Theme
-      "autosize": false,
-      "showVolume": true,
-      "showMA": false,
-      "hideDateRanges": false,
-      "hideMarketStatus": false,
-      "hideSymbolLogo": false,
-      "scalePosition": "right",
-      "scaleMode": "Normal",
-      "fontFamily": "-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif",
-      "fontSize": "10",
-      "noTimeScale": false,
-      "valuesTracking": "1",
-      "changeMode": "price-and-percent",
-      "chartType": "candlesticks",
-      "maLineColor": "#2962FF",
-      "maLineWidth": 1,
-      "maLength": 9,
-      "lineWidth": 2,
-      "lineType": 0,
-      "dateRanges": [
-        "1d|1",
-        "1m|30",
-        "3m|60",
-        "12m|1D",
-        "60m|1W",
-        "all|1M"
-      ]
+    script.text = JSON.stringify({
+      symbols: [[symbol, `${symbol}|1D`]],
+      chartOnly: false,
+      width: '100%',
+      height: 300,
+      locale: 'en',
+      colorTheme: theme,
+      showVolume: true,
+      showMA: false,
+      hideDateRanges: false,
+      hideMarketStatus: false,
+      hideSymbolLogo: false,
+      scalePosition: 'right',
+      scaleMode: 'Normal',
+      fontFamily:
+        '-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif',
+      fontSize: '10',
+      noTimeScale: false,
+      valuesTracking: '1',
+      changeMode: 'price-and-percent',
+      chartType: 'candlesticks',
+      maLineColor: '#2962FF',
+      maLineWidth: 1,
+      maLength: 9,
+      lineWidth: 2,
+      lineType: 0,
+      dateRanges: ['1d|1', '1m|30', '3m|60', '12m|1D', '60m|1W', 'all|1M'],
     });
 
-    if (containerRef.current) {
-      containerRef.current.appendChild(script);
-    }
+    container.appendChild(script);
+
+    // 3. cleanup：當 symbol / theme 改變 或 component 卸載時才清空
+    return () => {
+      container.innerHTML = '';
+    };
   }, [symbol, theme]);
 
   return (
-    <div className="tradingview-widget-container w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" ref={containerRef}>
-      <div className="tradingview-widget-container__widget"></div>
-    </div>
+    <div
+      className="tradingview-widget-container w-full rounded-lg overflow-hidden border"
+      ref={containerRef}
+    />
   );
 };
+
+
 
 // --- Main App Component ---
 export default function App() {
@@ -80,15 +72,45 @@ export default function App() {
   const [apiKey, setApiKey] = useState(import.meta.env.VITE_PERPLEXITY_API_KEY || '');
 
   const [showSettings, setShowSettings] = useState(false);
-  const [tickers, setTickers] = useState(['NVDA', 'TSLA', 'AAPL', 'AMD', 'ORCL']);
+  const DEFAULT_TICKERS = ['NVDA', 'TSLA', 'PLTR', 'AMD', 'ORCL', 'AVGO', 'PYPL', 'SPY'];
+
+  const [tickers, setTickers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pplx_watchlist');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load watchlist from localStorage', e);
+    }
+    return DEFAULT_TICKERS;
+  });
+
   const [selectedTickers, setSelectedTickers] = useState(new Set(['NVDA']));
   const [newTicker, setNewTicker] = useState('');
   const [loading, setLoading] = useState(false);
   const [stockData, setStockData] = useState({});
   const [error, setError] = useState('');
 
+
+  const removeTicker = (t) => {
+    setTickers(prev => prev.filter(x => x !== t));
+
+    // 如果被選中 → 一起取消
+    setSelectedTickers(prev => {
+      const next = new Set(prev);
+      next.delete(t);
+      return next;
+    });
+  };
+
   // Theme State
   const [darkMode, setDarkMode] = useState(true);
+  // Language State: 'zh' = 繁體中文, 'en' = English
+  const [language, setLanguage] = useState('zh');
 
   // We keep the localStorage logic as a fallback or override
   // useEffect(() => {
@@ -123,7 +145,7 @@ export default function App() {
       setShowSettings(true);
       return;
     }
-
+    console.log('🎯 Selected tickers:', Array.from(selectedTickers));
     if (selectedTickers.size === 0) {
       setError("請至少選擇一支股票");
       return;
@@ -132,21 +154,10 @@ export default function App() {
     setLoading(true);
     setError('');
     setStockData({});
+    const isChinese = language === 'zh';
 
-    const promises = Array.from(selectedTickers).map(async (symbol) => {
-      try {
-        const response = await fetch('https://api.perplexity.ai/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: "sonar-pro",
-            messages: [
-              {
-                role: "system",
-                content: `You are a professional Wall Street senior analyst creating a **pre-market briefing** for sophisticated investors based on the most recent data **as of today**.
+    const systemPrompt = isChinese
+      ? `You are a professional Wall Street senior analyst creating a **pre-market briefing** for sophisticated investors based on the most recent data **as of today**.
 ANALYZE the stock symbol provided.
 
 **IMPORTANT INSTRUCTION**:
@@ -161,26 +172,70 @@ Expected JSON Structure:
   "sentiment_score": NUMBER (1-10),
   "support_level_short": "STRING (e.g. '215 / 200 USD')",
   "resistance_level_short": "STRING (e.g. '235 USD')",
-  "major_news": "STRING (Bullet points. The most critical news headlines up to today)",
+  "major_news": "STRING (Bullet points. The most critical news headlines up to today, in 繁體中文)",
   "market_factors": "STRING (Detailed paragraph in 繁體中文. Explaining current bull/bear factors, valuation pressure, investor sentiment, recent catalysts)",
   "technical_analysis_detailed": "STRING (Detailed paragraph in 繁體中文. Provide short-term support/resistance, moving averages status, volume structure, key breakout/failure levels)",
 
   "tomorrow_forecast": "STRING (Detailed paragraph in 繁體中文. Give tomorrow’s expected scenario, price-range if possible, and the key drivers for upside/downside such as upcoming data/events)",
-  "week_ahead_forecast": "STRING (Detailed paragraph in 繫體中文. Focus on the coming week’s outlook, potential range, major events/catalysts, risk scenarios and contingency key levels)",
+  "week_ahead_forecast": "STRING (Detailed paragraph in 繁體中文. Focus on the coming week’s outlook, potential range, major events/catalysts, risk scenarios and contingency key levels)",
 
-  "future_outlook": "STRING (Detailed paragraph in 繯體中文. Mid-to-long term (3-12 mo) view, growth drivers, structural changes, valuation re-rating possibilities)",
+  "future_outlook": "STRING (Detailed paragraph in 繁體中文. Mid-to-long term (3-12 mo) view, growth drivers, structural changes, valuation re-rating possibilities)",
   "conclusion": "STRING (短而有行動性的總結，用繁體中文，例如：「偏多續抱／逢回佈局／保守觀望／逢高減碼」）"
 }`
+      : `You are a professional Wall Street senior analyst creating a **pre-market briefing** for sophisticated investors based on the most recent data **as of today**.
+ANALYZE the stock symbol provided.
+
+**IMPORTANT INSTRUCTION**:
+1. LANGUAGE: All text content MUST be in English.
+2. STYLE: Professional, analytical, detailed, and insightful. Avoid generic summaries. Use financial terminology (e.g., "profit taking", "valuation pressure", "range-bound consolidation").
+3. FORMAT: Return ONLY a valid JSON object. Do NOT include any markdown, explanation, or extra text.
+4. TODAY’S DATE: Be aware today's date is **<INSERT-TODAY-DATE>**. Make sure your analysis and any references to “today”, “tomorrow”, “next week” are appropriate to that date.
+
+Expected JSON Structure:
+{
+  "symbol": "STRING (Ticker)",
+  "sentiment_score": NUMBER (1-10),
+  "support_level_short": "STRING (e.g. '215 / 200 USD')",
+  "resistance_level_short": "STRING (e.g. '235 USD')",
+  "major_news": "STRING (Bullet points. The most critical news headlines up to today, in English)",
+  "market_factors": "STRING (Detailed paragraph in English. Explain current bull/bear factors, valuation pressure, investor sentiment, recent catalysts)",
+  "technical_analysis_detailed": "STRING (Detailed paragraph in English. Provide short-term support/resistance, moving averages status, volume structure, key breakout/failure levels)",
+
+  "tomorrow_forecast": "STRING (Detailed paragraph in English. Give tomorrow’s expected scenario, price-range if possible, and the key drivers for upside/downside such as upcoming data/events)",
+  "week_ahead_forecast": "STRING (Detailed paragraph in English. Focus on the coming week’s outlook, potential range, major events/catalysts, risk scenarios and contingency key levels)",
+
+  "future_outlook": "STRING (Detailed paragraph in English. Mid-to-long term (3-12 mo) view, growth drivers, structural changes, valuation re-rating possibilities)",
+  "conclusion": "STRING (Short, actionable conclusion in English, e.g. 'Maintain bullish bias on pullbacks', 'Neutral – wait for better entry', 'Reduce exposure into strength')"
+}`;
+
+
+    const promises = Array.from(selectedTickers).map(async (symbol) => {
+      const userPrompt = isChinese
+        ? `請用繁體中文，針對 ${symbol} 做深入分析，以 **今天的日期 (YYYY/MM/DD)** 為基準。重點說明市場情緒、技術價位、明日可能走勢、未來一週區間與潛在事件，以及中長線展望，並納入截至今日為止的最新重大新聞。`
+        : `Deep analysis for ${symbol}, using today's date (YYYY/MM/DD). Answer in English. Focus on market sentiment, technical levels, tomorrow’s price action, the coming week, and long-term outlook, and include the latest major news up to today.`;
+      try {
+        const response = await fetch('https://api.perplexity.ai/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: "sonar-pro",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt,
               },
               {
                 role: "user",
-                content: `Deep analysis for ${symbol}, using **today’s date (YYYY/MM/DD)**. Focus on market sentiment, technical levels, tomorrow’s price action, the coming week, and long-term outlook. Include the latest major news up to today.`
+                content: userPrompt,
               }
             ]
           })
         });
         console.log('ENV KEY:', import.meta.env.VITE_PERPLEXITY_API_KEY);
-
+        console.log('🧾 Response status for', symbol, response.status);
 
         if (!response.ok) {
           throw new Error(`API Error: ${response.status}`);
@@ -212,6 +267,14 @@ Expected JSON Structure:
     setLoading(false);
   };
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('pplx_watchlist', JSON.stringify(tickers));
+    } catch (e) {
+      console.warn('Failed to save watchlist to localStorage', e);
+    }
+  }, [tickers]);
+
   return (
     <div className={darkMode ? "dark" : ""}>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300">
@@ -228,6 +291,32 @@ Expected JSON Structure:
             </div>
 
             <div className="flex items-center space-x-3">
+              {/* Language Toggle */}
+              <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-full overflow-hidden text-xs">
+                <button
+                  onClick={() => setLanguage('zh')}
+                  className={
+                    'px-3 py-1 ' +
+                    (language === 'zh'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-transparent text-slate-500 dark:text-slate-400')
+                  }
+                >
+                  中
+                </button>
+                <button
+                  onClick={() => setLanguage('en')}
+                  className={
+                    'px-3 py-1 border-l border-slate-200 dark:border-slate-700 ' +
+                    (language === 'en'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-transparent text-slate-500 dark:text-slate-400')
+                  }
+                >
+                  EN
+                </button>
+              </div>
+
               {/* Theme Toggle */}
               <button
                 onClick={() => setDarkMode(!darkMode)}
@@ -239,11 +328,15 @@ Expected JSON Structure:
 
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className={`p-2 rounded-full transition-colors ${!apiKey ? 'bg-red-500/10 text-red-500 animate-pulse' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'}`}
+                className={`p-2 rounded-full transition-colors ${!apiKey
+                  ? 'bg-red-500/10 text-red-500 animate-pulse'
+                  : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'
+                  }`}
               >
                 <Settings className="w-5 h-5" />
               </button>
             </div>
+
           </div>
 
           {/* Settings Dropdown */}
@@ -280,19 +373,36 @@ Expected JSON Structure:
               </h2>
 
               <div className="flex flex-wrap gap-2 mb-4">
-                {tickers.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => toggleTicker(t)}
-                    className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all border ${selectedTickers.has(t)
-                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/30'
-                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-200'
-                      }`}
-                  >
-                    {t}
-                  </button>
-                ))}
+                {tickers.map(t => {
+                  const active = selectedTickers.has(t);
+                  return (
+                    <div
+                      key={t}
+                      className={`flex items-center border rounded-md ${active
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600'
+                        }`}
+                    >
+                      {/* 點股票本身 = 切換選中狀態 */}
+                      <button
+                        onClick={() => toggleTicker(t)}
+                        className="px-3 py-1.5"
+                      >
+                        {t}
+                      </button>
+
+                      {/* 刪除 */}
+                      <button
+                        onClick={() => removeTicker(t)}
+                        className="px-2 border-l border-slate-300 dark:border-slate-600 hover:bg-red-500/20"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
+
 
               <div className="flex gap-2 mb-6">
                 <input
@@ -421,7 +531,8 @@ Expected JSON Structure:
                             {/* 0. NEW: Major News Section */}
                             <div className="bg-indigo-50 dark:bg-indigo-600/10 p-4 rounded-lg border border-indigo-100 dark:border-indigo-500/30">
                               <h4 className="text-sm font-bold text-indigo-700 dark:text-indigo-300 mb-2 flex items-center">
-                                <Newspaper className="w-4 h-4 mr-2" /> 今日重大新聞
+                                <Newspaper className="w-4 h-4 mr-2" />
+                                {language === 'zh' ? '今日重大新聞' : 'Major News Today'}
                               </h4>
                               <p className="text-sm whitespace-pre-line text-slate-700 dark:text-slate-200 leading-relaxed">
                                 {data.major_news}
@@ -431,7 +542,8 @@ Expected JSON Structure:
                             {/* 1. Market Factors */}
                             <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
                               <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center">
-                                <Activity className="w-4 h-4 mr-2" /> 市場多空因素與情緒
+                                <Activity className="w-4 h-4 mr-2" />
+                                {language === 'zh' ? '市場多空因素與情緒' : 'Market Factors & Sentiment'}
                               </h4>
                               <p className="text-sm whitespace-pre-line text-slate-600 dark:text-slate-400">
                                 {data.market_factors}
@@ -441,7 +553,8 @@ Expected JSON Structure:
                             {/* 2. Detailed Technicals */}
                             <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
                               <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-2 flex items-center">
-                                <BarChart2 className="w-4 h-4 mr-2" /> 短線地板與支撐位詳解
+                                <BarChart2 className="w-4 h-4 mr-2" />
+                                {language === 'zh' ? '短線地板與支撐位詳解' : 'Technical Analysis (Key Levels)'}
                               </h4>
                               <p className="text-sm whitespace-pre-line text-slate-700 dark:text-slate-300">
                                 {data.technical_analysis_detailed}
@@ -453,7 +566,8 @@ Expected JSON Structure:
                               {/* 明日股價預測 */}
                               <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-lg border border-amber-100 dark:border-amber-600/30">
                                 <h4 className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase mb-2 flex items-center">
-                                  <DollarSign className="w-3 h-3 mr-2" /> 明日股價預測
+                                  <DollarSign className="w-3 h-3 mr-2" />
+                                  {language === 'zh' ? '明日股價預測' : 'Tomorrow Forecast'}
                                 </h4>
                                 <p className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">
                                   {data.tomorrow_forecast}
@@ -463,7 +577,8 @@ Expected JSON Structure:
                               {/* 未來一週走勢預測 */}
                               <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-lg border border-sky-100 dark:border-sky-600/30">
                                 <h4 className="text-xs font-bold text-sky-700 dark:text-sky-300 uppercase mb-2 flex items-center">
-                                  <TrendingDown className="w-3 h-3 mr-2" /> 未來一週走勢預測
+                                  <TrendingDown className="w-3 h-3 mr-2" />
+                                  {language === 'zh' ? '未來一週走勢預測' : 'Week Ahead Forecast'}
                                 </h4>
                                 <p className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">
                                   {data.week_ahead_forecast}
@@ -475,7 +590,8 @@ Expected JSON Structure:
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
                                 <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 flex items-center">
-                                  <TrendingUp className="w-3 h-3 mr-2" /> 未來走勢分析
+                                  <TrendingUp className="w-3 h-3 mr-2" />
+                                  {language === 'zh' ? '未來走勢分析' : 'Future Outlook'}
                                 </h4>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-line leading-relaxed">
                                   {data.future_outlook}
@@ -483,17 +599,21 @@ Expected JSON Structure:
                               </div>
                               <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
                                 <h4 className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase mb-2 flex items-center">
-                                  <BookOpen className="w-3 h-3 mr-2" /> 總結
+                                  <BookOpen className="w-3 h-3 mr-2" />
+                                  {language === 'zh' ? '總結' : 'Conclusion'}
                                 </h4>
                                 <p className="text-xs text-indigo-800 dark:text-indigo-200 whitespace-pre-line leading-relaxed">
                                   {data.conclusion}
                                 </p>
                               </div>
                             </div>
-
-
+                            {/* 🆕 Watermark */}
+                            <div className="pt-4 text-[10px] text-right text-slate-400 dark:text-slate-600">
+                              Made by <span className="font-semibold text-slate-500 dark:text-slate-300">Donald Su</span>
+                            </div>
                           </div>
                         )}
+
                       </div>
                     </div>
                   </div>
