@@ -77,64 +77,92 @@ export default function MarketDashboard({ apiKey, darkMode, language = 'zh' }) {
 
         const isChinese = language === 'zh';
 
+        // 1. 獲取當前美東時間 (Wall Street Time)
+        const now = new Date();
+        const options = {
+            timeZone: 'America/New_York',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        };
+        const currentDateStr = now.toLocaleString('en-US', options) + " EST";
+
+        // 2. 融合指令：時效性 + 深度要求
+        const recencyInstruction = isChinese
+            ? `CRITICAL: Analysis MUST be based on LATEST data (last 24 hours) relative to ${currentDateStr}. Include pre-market/after-hours data.`
+            : `CRITICAL: Analysis MUST be based on LATEST data (last 24 hours) relative to ${currentDateStr}. Include pre-market/after-hours data.`;
+
+        // 3. 強化 Prompt：要求詳細段落 (Detailed Paragraphs)
         const systemPrompt = isChinese
             ? `
-You are a professional Wall Street senior analyst creating a **pre-market briefing** for sophisticated investors based on the most recent data **as of today**.
-ANALYZE the stock symbol provided.
+You are a professional Wall Street senior analyst creating a **real-time, deep-dive briefing** for sophisticated investors.
 
-**IMPORTANT INSTRUCTION**:
-1. LANGUAGE: All text content MUST be in Traditional Chinese (繁體中文).
-2. STYLE: Professional, analytical, detailed, and insightful. Avoid generic summaries. Use financial terminology (e.g., "獲利回吐", "估值壓力", "震盪整理").
-3. FORMAT: Return ONLY a valid JSON object. Do NOT include any markdown, explanation, or extra text.
-4. TODAY’S DATE: Be aware today's date is **<INSERT-TODAY-DATE>**. Make sure your analysis and any references to “今日”、“明日”、“未來一週” are appropriate to that date.
+**TIME CONTEXT**:
+Current Wall Street Time: **${currentDateStr}**.
+
+**STRICT INSTRUCTIONS**:
+1. ${recencyInstruction}
+2. LANGUAGE: All text content MUST be in Traditional Chinese (繁體中文).
+3. STYLE: Professional, analytical, **detailed, and insightful**. Avoid generic summaries. Use financial terminology (e.g., "獲利回吐", "估值壓力", "震盪整理").
+4. **DEPTH**: Do not be brief. Provide distinct reasons and logic for every section.
+5. FORMAT: Return ONLY a valid JSON object. No markdown.
 
 Expected JSON Structure:
 {
   "symbol": "STRING (Ticker)",
   "sentiment_score": NUMBER (1-10),
-  "support_level_short": "STRING (e.g. '215 / 200 USD')",
-  "resistance_level_short": "STRING (e.g. '235 USD')",
-  "major_news": "STRING (Bullet points. The most critical news headlines up to today, in 繁體中文)",
-  "market_factors": "STRING (Detailed paragraph in 繁體中文. Explaining current bull/bear factors, valuation pressure, investor sentiment, recent catalysts)",
-  "technical_analysis_detailed": "STRING (Detailed paragraph in 繁體中文. Provide short-term support/resistance, moving averages status, volume structure, key breakout/failure levels)",
-
-  "tomorrow_forecast": "STRING (Detailed paragraph in 繁體中文. Give tomorrow’s expected scenario, price-range if possible, and the key drivers for upside/downside such as upcoming data/events)",
-  "week_ahead_forecast": "STRING (Detailed paragraph in 繁體中文. Focus on the coming week’s outlook, potential range, major events/catalysts, risk scenarios and contingency key levels)",
-
-  "future_outlook": "STRING (Detailed paragraph in 繁體中文. Mid-to-long term (3-12 mo) view, growth drivers, structural changes, valuation re-rating possibilities)",
-  "conclusion": "STRING (短而有行動性的總結，用繁體中文，例如：「偏多續抱／逢回佈局／保守觀望／逢高減碼」）"
+  "support_level_short": "STRING (Current levels based on latest price)",
+  "resistance_level_short": "STRING",
+  "major_news": "STRING (Bullet points. The most critical news from the last 24 hours in 繁體中文)",
+  "market_factors": "STRING (Detailed paragraph in 繁體中文. Explain WHY the stock is moving NOW. Discuss valuation, sentiment, and specific catalysts. Do not summarize; analyze.)",
+  "technical_analysis_detailed": "STRING (Detailed paragraph in 繁體中文. Provide short-term support/resistance, moving averages status, volume structure, and specific candlestick patterns from today.)",
+  "tomorrow_forecast": "STRING (Detailed paragraph in 繁體中文. Predict the immediate next session's scenario with specific price ranges and drivers.)",
+  "week_ahead_forecast": "STRING (Detailed paragraph in 繁體中文. Outlook for the coming week, potential catalysts, and risk scenarios.)",
+  "future_outlook": "STRING (Detailed paragraph in 繁體中文. Mid-to-long term (3-12 mo) view, growth drivers, and structural changes.)",
+  "conclusion": "STRING (Actionable summary: 偏多續抱／逢回佈局／保守觀望／逢高減碼)"
 }`
             : `
-You are a professional Wall Street senior analyst creating a **pre-market briefing** for sophisticated investors based on the most recent data **as of today**.
-ANALYZE the stock symbol provided.
+You are a professional Wall Street senior analyst creating a **real-time, deep-dive briefing** for sophisticated investors.
 
-**IMPORTANT INSTRUCTION**:
-1. LANGUAGE: All text content MUST be in English.
-2. STYLE: Professional, analytical, detailed, and insightful. Avoid generic summaries. Use financial terminology (e.g., "profit taking", "valuation pressure", "range-bound consolidation").
-3. FORMAT: Return ONLY a valid JSON object. Do NOT include any markdown, explanation, or extra text.
-4. TODAY’S DATE: Be aware today's date is **<INSERT-TODAY-DATE>**. Make sure your analysis and any references to “today”, “tomorrow”, “next week” are appropriate to that date.
+**TIME CONTEXT**:
+Current Wall Street Time: **${currentDateStr}**.
+
+**STRICT INSTRUCTIONS**:
+1. ${recencyInstruction}
+2. LANGUAGE: All text content MUST be in English.
+3. STYLE: Professional, analytical, **detailed, and insightful**. Avoid generic summaries.
+4. **DEPTH**: Do not be brief. Provide distinct reasons and logic for every section.
+5. FORMAT: Return ONLY a valid JSON object. No markdown.
 
 Expected JSON Structure:
 {
   "symbol": "STRING (Ticker)",
   "sentiment_score": NUMBER (1-10),
-  "support_level_short": "STRING (e.g. '215 / 200 USD')",
-  "resistance_level_short": "STRING (e.g. '235 USD')",
-  "major_news": "STRING (Bullet points. The most critical news headlines up to today, in English)",
-  "market_factors": "STRING (Detailed paragraph in English. Explain current bull/bear factors, valuation pressure, investor sentiment, recent catalysts)",
-  "technical_analysis_detailed": "STRING (Detailed paragraph in English. Provide short-term support/resistance, moving averages status, volume structure, key breakout/failure levels)",
-
-  "tomorrow_forecast": "STRING (Detailed paragraph in English. Give tomorrow’s expected scenario, price-range if possible, and the key drivers for upside/downside such as upcoming data/events)",
-  "week_ahead_forecast": "STRING (Detailed paragraph in English. Focus on the coming week’s outlook, potential range, major events/catalysts, risk scenarios and contingency key levels)",
-
-  "future_outlook": "STRING (Detailed paragraph in English. Mid-to-long term (3-12 mo) view, growth drivers, structural changes, valuation re-rating possibilities)",
-  "conclusion": "STRING (Short, actionable conclusion in English, e.g. 'Maintain bullish bias on pullbacks', 'Neutral – wait for better entry', 'Reduce exposure into strength')"
+  "support_level_short": "STRING (Current levels based on latest price)",
+  "resistance_level_short": "STRING",
+  "major_news": "STRING (Bullet points. The most critical news from the last 24 hours)",
+  "market_factors": "STRING (Detailed paragraph. Explain WHY the stock is moving NOW. Discuss valuation, sentiment, and specific catalysts. Do not summarize; analyze.)",
+  "technical_analysis_detailed": "STRING (Detailed paragraph. Provide short-term support/resistance, moving averages status, volume structure, and specific candlestick patterns from today.)",
+  "tomorrow_forecast": "STRING (Detailed paragraph. Predict the immediate next session's scenario with specific price ranges and drivers.)",
+  "week_ahead_forecast": "STRING (Detailed paragraph. Outlook for the coming week, potential catalysts, and risk scenarios.)",
+  "future_outlook": "STRING (Detailed paragraph. Mid-to-long term (3-12 mo) view, growth drivers, and structural changes.)",
+  "conclusion": "STRING (Actionable summary)"
 }`;
 
         const promises = Array.from(selectedTickers).map(async (symbol) => {
+            // User Prompt: 結合舊版的「深度分析」請求與新版的「時間基準」
             const userPrompt = isChinese
-                ? `請用繁體中文，針對 ${symbol} 做深入分析，以「今天的日期 (YYYY/MM/DD)」為基準。重點說明市場情緒、技術價位、明日可能走勢、未來一週區間與潛在事件，以及中長線展望，並納入截至今日為止的最新重大新聞。`
-                : `Deep analysis for ${symbol}, using today's date (YYYY/MM/DD). Answer in English. Focus on market sentiment, technical levels, tomorrow’s price action, the coming week, and long-term outlook, and include the latest major news up to today.`;
+                ? `深度分析代號：${symbol}。基準時間：${currentDateStr}。
+                   請結合「最新即時數據（過去24小時）」與「深度邏輯推演」。
+                   請勿簡略，需詳細說明市場情緒、技術型態、盤前/盤後動態對明日走勢的影響。
+                   忽略過時新聞，專注於當下發生的事件。`
+                : `Deep Dive Analysis for Symbol: ${symbol}. Reference Time: ${currentDateStr}.
+                   Combine "LATEST Real-time Data (Last 24h)" with "Comprehensive Reasoning".
+                   Do NOT be brief. Explain market sentiment, technical patterns, and pre-market/after-hours impact on tomorrow's trend.
+                   Ignore outdated news. Focus on what is happening NOW.`;
 
             try {
                 const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -149,6 +177,8 @@ Expected JSON Structure:
                             { role: 'system', content: systemPrompt },
                             { role: 'user', content: userPrompt },
                         ],
+                        // 稍微提高 temperature (從 0.2 升到 0.3) 讓它敢多寫一點，但仍保持準確
+                        temperature: 0.3
                     }),
                 });
 
@@ -167,7 +197,6 @@ Expected JSON Structure:
                 };
             }
         });
-
         const results = await Promise.all(promises);
         const newStockData = {};
         results.forEach((item) => {
@@ -325,6 +354,7 @@ Expected JSON Structure:
                                             <div className="animate-pulse space-y-4">
                                                 <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4" />
                                                 <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+                                                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6" />
                                             </div>
                                         )}
 
@@ -346,7 +376,7 @@ Expected JSON Structure:
                                                             ? '市場多空因素與情緒'
                                                             : 'Market Factors & Sentiment'}
                                                     </h4>
-                                                    <p className="whitespace-pre-line text-xs">
+                                                    <p className="whitespace-pre-line text-xs leading-relaxed">
                                                         {data.market_factors}
                                                     </p>
                                                 </div>
@@ -358,7 +388,7 @@ Expected JSON Structure:
                                                             ? '技術面分析（支撐 / 壓力）'
                                                             : 'Technical Analysis (Support / Resistance)'}
                                                     </h4>
-                                                    <p className="whitespace-pre-line text-xs">
+                                                    <p className="whitespace-pre-line text-xs leading-relaxed">
                                                         {data.technical_analysis_detailed}
                                                     </p>
                                                 </div>
@@ -370,7 +400,7 @@ Expected JSON Structure:
                                                             <DollarSign className="w-4 h-4 mr-1" />
                                                             {language === 'zh' ? '明日預測' : 'Tomorrow Forecast'}
                                                         </h4>
-                                                        <p className="whitespace-pre-line text-xs">
+                                                        <p className="whitespace-pre-line text-xs leading-relaxed">
                                                             {data.tomorrow_forecast}
                                                         </p>
                                                     </div>
@@ -379,7 +409,7 @@ Expected JSON Structure:
                                                             <TrendingDown className="w-4 h-4 mr-1" />
                                                             {language === 'zh' ? '未來一週' : 'Week Ahead'}
                                                         </h4>
-                                                        <p className="whitespace-pre-line text-xs">
+                                                        <p className="whitespace-pre-line text-xs leading-relaxed">
                                                             {data.week_ahead_forecast}
                                                         </p>
                                                     </div>
@@ -392,7 +422,7 @@ Expected JSON Structure:
                                                             ? '未來展望（1–3 個月）'
                                                             : 'Future Outlook (1–3M)'}
                                                     </h4>
-                                                    <p className="whitespace-pre-line text-xs">
+                                                    <p className="whitespace-pre-line text-xs leading-relaxed">
                                                         {data.future_outlook}
                                                     </p>
                                                 </div>
@@ -403,7 +433,7 @@ Expected JSON Structure:
                                                         <BookOpen className="w-4 h-4 mr-1" />
                                                         {language === 'zh' ? '總結' : 'Conclusion'}
                                                     </h4>
-                                                    <p className="whitespace-pre-line text-xs">
+                                                    <p className="whitespace-pre-line text-xs leading-relaxed">
                                                         {data.conclusion}
                                                     </p>
                                                 </div>

@@ -186,7 +186,10 @@ function App() {
             className={activeTab === 'portfolio' ? 'block' : 'hidden'}
             aria-hidden={activeTab !== 'portfolio'}
           >
-            <PortfolioAnalysis googleApiKey={googleApiKey} />
+            <PortfolioAnalysis
+              googleApiKey={googleApiKey}
+              perplexityApiKey={apiKey}
+            />
           </section>
         </main>
 
