@@ -15,10 +15,29 @@ import TradingViewWidget from './Trading_View_Widget_Component.jsx';
 
 export default function MarketDashboard({ apiKey, darkMode, language = 'zh' }) {
     const DEFAULT_TICKERS = ['NVDA', 'TSLA', 'PLTR', 'AMD', 'ORCL', 'AVGO', 'PYPL', 'SPY'];
+    const DEFAULT_TW_TICKERS = ['2330', '2317', '2454', '2308', '2881', '2882'];
+    const [market, setMarket] = useState('US');
+
+    const normalizeTicker = (value, targetMarket = market) => {
+        if (!value) return '';
+        const cleaned = value.trim().toUpperCase();
+        if (targetMarket === 'TW') {
+            return cleaned.replace(/^TWSE:/, '').replace(/\.TW$/, '');
+        }
+        return cleaned.replace(/^TWSE:/, '').replace(/\.TW$/, '');
+    };
+
+    const getTradingViewSymbol = (value) => {
+        const normalized = normalizeTicker(value);
+        if (market === 'TW') {
+            return `TWSE:${normalized}`;
+        }
+        return normalized;
+    };
 
     const [tickers, setTickers] = useState(() => {
         try {
-            const saved = localStorage.getItem('pplx_watchlist');
+            const saved = localStorage.getItem('pplx_watchlist_us');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) {
@@ -54,8 +73,9 @@ export default function MarketDashboard({ apiKey, darkMode, language = 'zh' }) {
     };
 
     const addTicker = () => {
-        if (newTicker && !tickers.includes(newTicker.toUpperCase())) {
-            setTickers([...tickers, newTicker.toUpperCase()]);
+        const normalizedTicker = normalizeTicker(newTicker);
+        if (normalizedTicker && !tickers.includes(normalizedTicker)) {
+            setTickers([...tickers, normalizedTicker]);
             setNewTicker('');
         }
     };
@@ -77,10 +97,10 @@ export default function MarketDashboard({ apiKey, darkMode, language = 'zh' }) {
 
         const isChinese = language === 'zh';
 
-        // 1. 獲取當前美東時間 (Wall Street Time)
+        // 1. 依市場獲取基準時間
         const now = new Date();
         const options = {
-            timeZone: 'America/New_York',
+            timeZone: market === 'TW' ? 'Asia/Taipei' : 'America/New_York',
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -88,20 +108,20 @@ export default function MarketDashboard({ apiKey, darkMode, language = 'zh' }) {
             minute: '2-digit',
             hour12: false
         };
-        const currentDateStr = now.toLocaleString('en-US', options) + " EST";
+        const currentDateStr = now.toLocaleString('en-US', options) + (market === 'TW' ? ' TST' : ' EST');
 
         // 2. 融合指令：時效性 + 深度要求
-        const recencyInstruction = isChinese
-            ? `CRITICAL: Analysis MUST be based on LATEST data (last 24 hours) relative to ${currentDateStr}. Include pre-market/after-hours data.`
+        const recencyInstruction = market === 'TW'
+            ? `CRITICAL: Analysis MUST be based on LATEST data (last 24 hours) relative to ${currentDateStr}. Focus on Taiwan market session and after-hours market updates.`
             : `CRITICAL: Analysis MUST be based on LATEST data (last 24 hours) relative to ${currentDateStr}. Include pre-market/after-hours data.`;
 
         // 3. 強化 Prompt：要求詳細段落 (Detailed Paragraphs)
         const systemPrompt = isChinese
             ? `
-You are a professional Wall Street senior analyst creating a **real-time, deep-dive briefing** for sophisticated investors.
+You are a professional ${market === 'TW' ? 'Taiwan market' : 'Wall Street'} senior analyst creating a **real-time, deep-dive briefing** for sophisticated investors.
 
 **TIME CONTEXT**:
-Current Wall Street Time: **${currentDateStr}**.
+Current ${market === 'TW' ? 'Taiwan Market' : 'Wall Street'} Time: **${currentDateStr}**.
 
 **STRICT INSTRUCTIONS**:
 1. ${recencyInstruction}
@@ -109,6 +129,7 @@ Current Wall Street Time: **${currentDateStr}**.
 3. STYLE: Professional, analytical, **detailed, and insightful**. Avoid generic summaries. Use financial terminology (e.g., "獲利回吐", "估值壓力", "震盪整理").
 4. **DEPTH**: Do not be brief. Provide distinct reasons and logic for every section.
 5. FORMAT: Return ONLY a valid JSON object. No markdown.
+6. MARKET SCOPE: Analyze **${market === 'TW' ? 'Taiwan listed stocks' : 'U.S. listed stocks'}** only.
 
 Expected JSON Structure:
 {
@@ -125,10 +146,10 @@ Expected JSON Structure:
   "conclusion": "STRING (Actionable summary: 偏多續抱／逢回佈局／保守觀望／逢高減碼)"
 }`
             : `
-You are a professional Wall Street senior analyst creating a **real-time, deep-dive briefing** for sophisticated investors.
+You are a professional ${market === 'TW' ? 'Taiwan market' : 'Wall Street'} senior analyst creating a **real-time, deep-dive briefing** for sophisticated investors.
 
 **TIME CONTEXT**:
-Current Wall Street Time: **${currentDateStr}**.
+Current ${market === 'TW' ? 'Taiwan Market' : 'Wall Street'} Time: **${currentDateStr}**.
 
 **STRICT INSTRUCTIONS**:
 1. ${recencyInstruction}
@@ -136,6 +157,7 @@ Current Wall Street Time: **${currentDateStr}**.
 3. STYLE: Professional, analytical, **detailed, and insightful**. Avoid generic summaries.
 4. **DEPTH**: Do not be brief. Provide distinct reasons and logic for every section.
 5. FORMAT: Return ONLY a valid JSON object. No markdown.
+6. MARKET SCOPE: Analyze **${market === 'TW' ? 'Taiwan listed stocks' : 'U.S. listed stocks'}** only.
 
 Expected JSON Structure:
 {
@@ -155,11 +177,11 @@ Expected JSON Structure:
         const promises = Array.from(selectedTickers).map(async (symbol) => {
             // User Prompt: 結合舊版的「深度分析」請求與新版的「時間基準」
             const userPrompt = isChinese
-                ? `深度分析代號：${symbol}。基準時間：${currentDateStr}。
+                ? `深度分析代號：${symbol}（市場：${market === 'TW' ? '台股' : '美股'}）。基準時間：${currentDateStr}。
                    請結合「最新即時數據（過去24小時）」與「深度邏輯推演」。
                    請勿簡略，需詳細說明市場情緒、技術型態、盤前/盤後動態對明日走勢的影響。
                    忽略過時新聞，專注於當下發生的事件。`
-                : `Deep Dive Analysis for Symbol: ${symbol}. Reference Time: ${currentDateStr}.
+                : `Deep Dive Analysis for Symbol: ${symbol} (Market: ${market === 'TW' ? 'Taiwan' : 'US'}). Reference Time: ${currentDateStr}.
                    Combine "LATEST Real-time Data (Last 24h)" with "Comprehensive Reasoning".
                    Do NOT be brief. Explain market sentiment, technical patterns, and pre-market/after-hours impact on tomorrow's trend.
                    Ignore outdated news. Focus on what is happening NOW.`;
@@ -208,12 +230,33 @@ Expected JSON Structure:
     };
 
     useEffect(() => {
+        const storageKey = market === 'TW' ? 'pplx_watchlist_tw' : 'pplx_watchlist_us';
         try {
-            localStorage.setItem('pplx_watchlist', JSON.stringify(tickers));
+            localStorage.setItem(storageKey, JSON.stringify(tickers));
         } catch (e) {
             console.warn('Failed to save watchlist to localStorage', e);
         }
-    }, [tickers]);
+    }, [tickers, market]);
+
+    useEffect(() => {
+        const storageKey = market === 'TW' ? 'pplx_watchlist_tw' : 'pplx_watchlist_us';
+        const fallbackTickers = market === 'TW' ? DEFAULT_TW_TICKERS : DEFAULT_TICKERS;
+        try {
+            const saved = localStorage.getItem(storageKey);
+            const parsed = saved ? JSON.parse(saved) : null;
+            const nextTickers = Array.isArray(parsed) && parsed.length > 0 ? parsed : fallbackTickers;
+            setTickers(nextTickers);
+            setSelectedTickers(new Set(nextTickers.length > 0 ? [nextTickers[0]] : []));
+            setStockData({});
+            setError('');
+        } catch (e) {
+            console.warn('Failed to switch watchlist from localStorage', e);
+            setTickers(fallbackTickers);
+            setSelectedTickers(new Set([fallbackTickers[0]]));
+            setStockData({});
+            setError('');
+        }
+    }, [market]);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-[280px,1fr] gap-6">
@@ -246,6 +289,27 @@ Expected JSON Structure:
                                     <span>Generate Report</span>
                                 </>
                             )}
+                        </button>
+                    </div>
+
+                    <div className="mb-3 flex rounded-lg border border-slate-300 dark:border-slate-700 overflow-hidden text-xs">
+                        <button
+                            onClick={() => setMarket('US')}
+                            className={`flex-1 py-1.5 font-semibold transition-colors ${market === 'US'
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                }`}
+                        >
+                            美股 US
+                        </button>
+                        <button
+                            onClick={() => setMarket('TW')}
+                            className={`flex-1 py-1.5 font-semibold transition-colors ${market === 'TW'
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                                }`}
+                        >
+                            台股 TW
                         </button>
                     </div>
 
@@ -289,7 +353,7 @@ Expected JSON Structure:
                             value={newTicker}
                             onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
                             onKeyDown={(e) => e.key === 'Enter' && addTicker()}
-                            placeholder="ADD SYMBOL"
+                            placeholder={market === 'TW' ? 'ADD TW CODE (e.g. 2330)' : 'ADD SYMBOL'}
                             className="flex-1 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600"
                         />
                         <button
@@ -322,7 +386,7 @@ Expected JSON Structure:
                                 <div className="flex flex-col">
                                     {/* 上：股價圖，固定高度避免被壓扁 */}
                                     <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 h-[320px] md:h-[360px]">
-                                        <TradingViewWidget symbol={symbol} theme="dark" chartType="area" />
+                                        <TradingViewWidget symbol={getTradingViewSymbol(symbol)} theme="dark" chartType="area" />
                                     </div>
 
                                     {/* 下：AI 報告 */}
